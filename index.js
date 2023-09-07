@@ -1,51 +1,15 @@
 const delete_properties = ["createdBy", "dateCreated", "id", "dashboardId", "widgetId"]
 
 window.onload = async () => {
+    
     const form = document.getElementById('transferForm');
-    const title = document.getElementById('dashboard_title');
-
-    const dash = await getCurrentOrg()
-    console.log(dash);
-    console.log(dash["base_url"])
-    const from_dashboard = `https://${dash["base_url"]}/api/0/organizations/${dash["org_slug"]}/dashboards/${dash["dashboard_id"]}/`
-    const dashboard = await get_dashboard(from_dashboard);
-    title.innerHTML = dashboard["title"];
-
+   
     form.onsubmit = async (e) => {
-        e.preventDefault();
-        let payload = await normalize_data(dashboard);
-        payload["projects"] = []
-        console.log(payload)
-        
-        let org_slug = document.getElementById("org_slug")
-        if (org_slug.value !== "") {
-            console.log('submitting');
-            let options = {
-                contentScriptQuery: "submitDashboard",
-                org_slug: org_slug.value,
-                payload: payload
-            }
-            chrome.runtime.sendMessage(options, response => {
-                console.log("response");
-                console.log(response);
-            })
-            /*let to_dashboard = `https://${org_slug.value}.sentry.io/api/0/organizations/${org_slug.value}/dashboards/`;
-            let response = await fetch(to_dashboard, { 
-                mode: "cors",
-                cache: "no-cache",
-                credentials: "same-origin",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                redirect: "follow",
-                referrerPolicy: "no-referrer",
-                method: "POST", 
-                body: JSON.stringify(payload) 
-            })
-            console.log(response.json());*/
-        }
-
-        
+      e.preventDefault()
+      const dash = await getCurrentOrg()
+      const from_dashboard = `https://${dash["base_url"]}/api/0/organizations/${dash["org_slug"]}/dashboards/${dash["dashboard_id"]}/`
+      const dashboard = await get_dashboard(from_dashboard);
+      downloadObjectAsJson(normalize_data(dashboard), 'dashboard')
     }
 
     async function getCurrentOrg(){
@@ -60,7 +24,6 @@ window.onload = async () => {
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
                 var activeTab = tabs[0];
                 url = activeTab.url;
-                console.log(url)
                 for (attr in regex) {
                     let match = url.match(regex[attr]);
                     if (match.length) {
@@ -81,12 +44,16 @@ window.onload = async () => {
     }
 
     function normalize_data(source) {
+        if (source.hasOwnProperty("projects")) {
+            source["projects"] = []
+        }
+
         let payload = {}
         let last_data_attr = null;
         for(data in source) {
             if (Array.isArray(source[data]) && source[data].length !== 0) {
                 for(attr in source[data]) {
-                    if (typeof source[data] == "undefined") {
+                    if (typeof source[data] === "undefined") {
                         continue;
                     }
                     if (!payload.hasOwnProperty(data)) {
@@ -117,4 +84,15 @@ window.onload = async () => {
 
         return payload
     }
+
+    function downloadObjectAsJson(exportObj, exportName) {
+        const dataStr =
+          'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportObj));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute('href', dataStr);
+        downloadAnchorNode.setAttribute('download', exportName + '.json');
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+      }
 }
